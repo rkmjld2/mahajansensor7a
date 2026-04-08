@@ -170,6 +170,8 @@ def home():
 # -------- QUERY COMMAND --------
 @app.route("/query")
 def query():
+    global latest_cmd
+
     cmd = request.args.get("cmd")
 
     try:
@@ -178,7 +180,7 @@ def query():
 
         parts = cmd.strip().split()
 
-        # -------- DELETE --------
+        # -------- DELETE (SERVER DATA RANGE) --------
         if parts[0].lower() == "delete" and len(parts) == 3:
             start = int(parts[1])
             end = int(parts[2])
@@ -193,9 +195,9 @@ def query():
                 writer.writeheader()
                 writer.writerows(rows)
 
-            return "Deleted"
+            return f"Deleted records from {start} to {end} (SERVER)"
 
-        # -------- SEARCH --------
+        # -------- SEARCH (SERVER DATA RANGE) --------
         elif parts[0].lower() == "search" and len(parts) == 3:
             start = int(parts[1])
             end = int(parts[2])
@@ -207,11 +209,22 @@ def query():
 
             return jsonify(result)
 
-        # -------- SHOW ALL --------
+        # -------- SHOW ALL SERVER DATA --------
         elif parts[0].lower() == "all":
             with open(DATA_FILE, "r") as f:
                 return jsonify(list(csv.DictReader(f)))
 
+        # -------- CLEAR SD CARD --------
+        elif parts[0].lower() == "clear_sd":
+            latest_cmd = "CLEAR_SD"
+            return "SD Clear Command Sent to ESP"
+
+        # -------- SYNC SD TO SERVER --------
+        elif parts[0].lower() == "sync_sd":
+            latest_cmd = "SYNC"
+            return "SD Sync Command Sent to ESP"
+
+        # -------- UNKNOWN COMMAND --------
         else:
             return "Unknown Command"
 
