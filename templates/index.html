@@ -224,7 +224,15 @@ async function resetView(){
     await fetch('/api/reset');
     loadData();   // back to live mode
 }
+async function syncSD(){
+    alert("Sync started... wait 10-20 sec");
 
+    await fetch('/sync');
+
+    setTimeout(()=>{
+        loadData();   // reload after sync
+    },15000);
+}
 
  // new scripts ended    
 </script>
