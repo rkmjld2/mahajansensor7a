@@ -28,7 +28,24 @@ def full_data():
     except:
         return jsonify([])
 
+#-------
+# -------- SEND SYNC COMMAND --------
+@app.route("/sync")
+def sync():
+    global latest_cmd
+    latest_cmd = "SYNC"
+    return "Sync Started"
 
+
+# -------- ESP READ COMMAND --------
+@app.route("/api/cmd")
+def get_cmd():
+    global latest_cmd
+    cmd = latest_cmd
+    latest_cmd = ""
+    return cmd
+
+#-----
 # -------- RESET TO LIVE --------
 @app.route("/api/reset")
 def reset_view():
