@@ -210,7 +210,22 @@ setInterval(checkStatus,5000);
 
 loadData();
 checkStatus();
+// -------new script added 
+// -------- LOAD FULL SD DATA --------
+async function loadFullData(){
+    let res = await fetch('/api/full');
+    fullData = await res.json();
+    displayData(fullData);
+}
 
+// -------- RESET VIEW --------
+async function resetView(){
+    await fetch('/api/reset');
+    loadData();   // back to live mode
+}
+
+
+ // new scripts ended    
 </script>
 
 </body>
