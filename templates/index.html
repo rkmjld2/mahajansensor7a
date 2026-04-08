@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sensor Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { font-family: Arial; padding:20px; }
+table, th, td { border:1px solid black; border-collapse:collapse; padding:5px; }
+button { margin:5px; }
+</style>
+</head>
+
+<body>
+
+<h2>Sensor Dashboard</h2>
+
+Status: <span id="status">Checking...</span>
+
+<br><br>
+
+<button onclick="start()">Start</button>
+<button onclick="stop()">Stop</button>
+<button onclick="downloadCSV()">Download CSV</button>
+
+<hr>
+
+<!-- QUERY BOX -->
+<h3>Command Box</h3>
+<input type="text" id="cmd" placeholder="Example: delete 10 20 OR all">
+<button onclick="runQuery()">Run</button>
+
+<p id="queryResult"></p>
+
+<hr>
+
+<!-- SEARCH -->
+<h3>Search Filter</h3>
+
+Start ID: <input type="number" id="startId">
+End ID: <input type="number" id="endId">
+
+<br><br>
+
+Start Date: <input type="datetime-local" id="startDate">
+End Date: <input type="datetime-local" id="endDate">
+
+<br><br>
+
+<button onclick="filterData()">Apply Filter</button>
+
+<hr>
+
+<!-- GRAPH CONTROL -->
+<h3>Graph Control</h3>
+
+<select id="graphType">
+<option value="line">Line</option>
+<option value="bar">Bar</option>
+<option value="pie">Pie</option>
+</select>
+
+<button onclick="generateGraph()">Show Graph</button>
+
+<br><br>
+
+<canvas id="chart" height="100"></canvas>
+
+<hr>
+
+<!-- TABLE -->
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>S1</th>
+<th>S2</th>
+<th>S3</th>
+<th>Time</th>
+</tr>
+</thead>
+
+<tbody id="data"></tbody>
+</table>
+
+<script>
+
+let chart;
+let fullData = [];
+
+// -------- LOAD DATA --------
+async function loadData(){
+    let res = await fetch('/api/all');
+    fullData = await res.json();
+    displayData(fullData);
+}
+
+// -------- DISPLAY --------
+function displayData(data){
+    let html="";
+    data.forEach(r=>{
+        html += `<tr>
+        <td>${r.id}</td>
+        <td>${r.sensor1}</td>
+        <td>${r.sensor2}</td>
+        <td>${r.sensor3}</td>
+        <td>${r.time}</td>
+        </tr>`;
+    });
+    document.getElementById("data").innerHTML = html;
+}
+
+// -------- FILTER --------
+function filterData(){
+
+    let sid = document.getElementById("startId").value;
+    let eid = document.getElementById("endId").value;
+
+    let sd = document.getElementById("startDate").value;
+    let ed = document.getElementById("endDate").value;
+
+    let filtered = fullData.filter(r=>{
+        let ok = true;
+
+        // ✅ FIX: convert to number
+        let id = parseInt(r.id);
+
+        if(sid && eid){
+            if(id < parseInt(sid) || id > parseInt(eid)) ok = false;
+        }
+
+        // ✅ FIX: proper date comparison
+        if(sd && ed){
+            let rowTime = new Date(r.time).getTime();
+            let startTime = new Date(sd).getTime();
+            let endTime = new Date(ed).getTime();
+
+            if(rowTime < startTime || rowTime > endTime) ok = false;
+        }
+
+        return ok;
+    });
+
+    displayData(filtered);
+}
+// -------- GRAPH --------
+function generateGraph(){
+
+    let type = document.getElementById("graphType").value;
+
+    let rows = document.querySelectorAll("#data tr");
+
+    let labels=[], s1=[], s2=[], s3=[];
+
+    rows.forEach(r=>{
+        // ✅ ONLY USE VISIBLE ROWS
+        if(r.style.display !== "none"){
+
+            labels.push(r.children[4].innerText);
+            s1.push(parseFloat(r.children[1].innerText));
+            s2.push(parseFloat(r.children[2].innerText));
+            s3.push(parseFloat(r.children[3].innerText));
+
+        }
+    });
+
+    if(chart) chart.destroy();
+
+    chart = new Chart(document.getElementById("chart"), {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: [
+                {label:"S1", data:s1},
+                {label:"S2", data:s2},
+                {label:"S3", data:s3}
+            ]
+        }
+    });
+}    
+// -------- QUERY --------
+async function runQuery(){
+    let cmd = document.getElementById("cmd").value;
+
+    let res = await fetch('/query?cmd=' + cmd);
+    let text = await res.text();
+
+    document.getElementById("queryResult").innerText = text;
+
+    loadData();
+}
+
+// -------- STATUS --------
+async function checkStatus(){
+    let res = await fetch('/status');
+    let data = await res.json();
+    document.getElementById("status").innerText = data.status;
+}
+
+// -------- CONTROL --------
+function start(){ fetch('/start'); }
+function stop(){ fetch('/stop'); }
+function downloadCSV(){ window.location.href="/download"; }
+
+// -------- AUTO --------
+setInterval(loadData,5000);
+setInterval(checkStatus,5000);
+
+loadData();
+checkStatus();
+
+</script>
+
+</body>
+</html>
