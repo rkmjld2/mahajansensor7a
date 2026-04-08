@@ -30,16 +30,22 @@ Status: <span id="status">Checking...</span>
 
 <h3>🔍 Search</h3>
 
+<!-- ID RANGE -->
 ID From: <input type="number" id="idFrom">
 ID To: <input type="number" id="idTo">
 <button onclick="searchByID()">Search ID</button>
 
-<br>
+<br><br>
 
-Date: <input type="date" id="dateSearch">
+<!-- DATE RANGE -->
+Start Date: <input type="date" id="startDate">
+End Date: <input type="date" id="endDate">
 <button onclick="searchByDate()">Search Date</button>
 
+<br>
+
 <button onclick="showAll()">Show All</button>
+<button onclick="showGraph()">Show Graph</button>
 
 <hr>
 
@@ -69,12 +75,13 @@ Date: <input type="date" id="dateSearch">
 
 let chart;
 let fullData = [];
+let filteredData = [];
 
 async function loadData(){
     let res = await fetch('/api/all');
     fullData = await res.json();
+    filteredData = fullData;
     displayData(fullData);
-    drawGraph(fullData);
 }
 
 function displayData(data){
@@ -113,30 +120,41 @@ function drawGraph(data){
     });
 }
 
+// -------- SEARCH ID --------
 function searchByID(){
     let from = parseInt(document.getElementById("idFrom").value);
     let to = parseInt(document.getElementById("idTo").value);
 
-    let result = fullData.filter(r => r.id >= from && r.id <= to);
+    filteredData = fullData.filter(r => r.id >= from && r.id <= to);
 
-    displayData(result);
-    drawGraph(result);
+    displayData(filteredData);
 }
 
+// -------- SEARCH DATE RANGE --------
 function searchByDate(){
-    let date = document.getElementById("dateSearch").value;
+    let start = document.getElementById("startDate").value;
+    let end = document.getElementById("endDate").value;
 
-    let result = fullData.filter(r => r.time.startsWith(date));
+    filteredData = fullData.filter(r => {
+        let d = r.time.substring(0,10);
+        return d >= start && d <= end;
+    });
 
-    displayData(result);
-    drawGraph(result);
+    displayData(filteredData);
 }
 
+// -------- SHOW ALL --------
 function showAll(){
+    filteredData = fullData;
     displayData(fullData);
-    drawGraph(fullData);
 }
 
+// -------- GRAPH BUTTON --------
+function showGraph(){
+    drawGraph(filteredData);
+}
+
+// -------- COMMAND --------
 async function runQuery(){
     let cmd = document.getElementById("cmd").value;
     let res = await fetch('/query?cmd=' + cmd);
@@ -145,17 +163,20 @@ async function runQuery(){
     loadData();
 }
 
+// -------- SYNC --------
 async function syncSD(){
     alert("Sync started... wait 15 sec");
     await fetch('/query?cmd=sync_sd');
     setTimeout(loadData,15000);
 }
 
+// -------- RESET --------
 async function resetView(){
     await fetch('/api/reset');
     loadData();
 }
 
+// -------- BASIC --------
 function start(){ fetch('/start'); }
 function stop(){ fetch('/stop'); }
 function downloadCSV(){ window.location.href="/download"; }
