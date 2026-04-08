@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import csv, os, time
 
 app = Flask(__name__)
-
+view_mode = "live"   # "live" or "full"
 # -------- CONFIG --------
 DATA_FILE = "sensor_data.csv"
 API_KEY = "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
@@ -16,7 +16,25 @@ if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["id","sensor1","sensor2","sensor3","time"])
+# -------- FULL DATA (SIMULATED SD BACKUP VIEW) --------
+@app.route("/api/full")
+def full_data():
+    global view_mode
+    view_mode = "full"
 
+    try:
+        with open(DATA_FILE, "r") as f:
+            return jsonify(list(csv.DictReader(f)))
+    except:
+        return jsonify([])
+
+
+# -------- RESET TO LIVE --------
+@app.route("/api/reset")
+def reset_view():
+    global view_mode
+    view_mode = "live"
+    return "Reset Done"
 
 # -------- RECEIVE DATA --------
 @app.route("/api/data")
