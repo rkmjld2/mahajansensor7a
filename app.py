@@ -3,6 +3,8 @@ import csv, os, time
 
 app = Flask(__name__)
 view_mode = "live"   # "live" or "full"
+
+latest_cmd = ""
 # -------- CONFIG --------
 DATA_FILE = "sensor_data.csv"
 API_KEY = "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
