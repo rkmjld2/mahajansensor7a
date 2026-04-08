@@ -2,58 +2,21 @@ from flask import Flask, request, jsonify, render_template, send_file
 import csv, os, time
 
 app = Flask(__name__)
-view_mode = "live"   # "live" or "full"
 
-latest_cmd = ""
 # -------- CONFIG --------
 DATA_FILE = "sensor_data.csv"
 API_KEY = "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
 
 last_seen = 0
 collect_data = True
-
+latest_cmd = ""
+view_mode = "live"   # live / full
 
 # -------- INIT FILE --------
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["id","sensor1","sensor2","sensor3","time"])
-# -------- FULL DATA (SIMULATED SD BACKUP VIEW) --------
-@app.route("/api/full")
-def full_data():
-    global view_mode
-    view_mode = "full"
-
-    try:
-        with open(DATA_FILE, "r") as f:
-            return jsonify(list(csv.DictReader(f)))
-    except:
-        return jsonify([])
-
-#-------
-# -------- SEND SYNC COMMAND --------
-@app.route("/sync")
-def sync():
-    global latest_cmd
-    latest_cmd = "SYNC"
-    return "Sync Started"
-
-
-# -------- ESP READ COMMAND --------
-@app.route("/api/cmd")
-def get_cmd():
-    global latest_cmd
-    cmd = latest_cmd
-    latest_cmd = ""
-    return cmd
-
-#-----
-# -------- RESET TO LIVE --------
-@app.route("/api/reset")
-def reset_view():
-    global view_mode
-    view_mode = "live"
-    return "Reset Done"
 
 # -------- RECEIVE DATA --------
 @app.route("/api/data")
@@ -75,70 +38,60 @@ def receive():
         s3 = request.args.get("s3")
         now = request.args.get("time")
 
-        # -------- READ OLD DATA --------
-        rows = []
         with open(DATA_FILE, "r") as f:
             rows = list(csv.DictReader(f))
 
-        # -------- DUPLICATE CHECK --------
+        # Duplicate check
         for r in rows:
-            if r["time"] == now and r["sensor1"] == s1 and r["sensor2"] == s2:
+            if r["time"] == now and r["sensor1"] == s1:
                 return "Duplicate"
 
-        # -------- ID GENERATE --------
-        if len(rows) == 0:
-            new_id = 1
-        else:
-            new_id = int(rows[-1]["id"]) + 1
+        new_id = int(rows[-1]["id"]) + 1 if rows else 1
 
-        # -------- SAVE --------
         with open(DATA_FILE, "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([new_id, s1, s2, s3, now])
 
-        print("Saved:", new_id)
-
         return "OK"
 
     except Exception as e:
-        print("Error:", e)
         return "Error", 500
 
-
-# -------- ALL DATA --------
+# -------- GET DATA --------
 @app.route("/api/all")
 def all_data():
+    global view_mode
+
     try:
         with open(DATA_FILE, "r") as f:
-            return jsonify(list(csv.DictReader(f)))
+            rows = list(csv.DictReader(f))
+
+        if view_mode == "live":
+            return jsonify(rows[-50:])
+        else:
+            return jsonify(rows)
+
     except:
         return jsonify([])
 
+# -------- FULL VIEW --------
+@app.route("/api/full")
+def full_data():
+    global view_mode
+    view_mode = "full"
+    return all_data()
+
+# -------- RESET VIEW --------
+@app.route("/api/reset")
+def reset_view():
+    global view_mode
+    view_mode = "live"
+    return "Reset Done"
 
 # -------- DOWNLOAD --------
 @app.route("/download")
 def download():
     return send_file(DATA_FILE, as_attachment=True)
-
-
-# -------- DELETE --------
-@app.route("/delete")
-def delete():
-    start = int(request.args.get("start"))
-    end = int(request.args.get("end"))
-
-    with open(DATA_FILE, "r") as f:
-        rows = list(csv.DictReader(f))
-
-    rows = [r for r in rows if not (start <= int(r["id"]) <= end)]
-
-    with open(DATA_FILE, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","time"])
-        writer.writeheader()
-        writer.writerows(rows)
-
-    return "Deleted"
-
 
 # -------- STATUS --------
 @app.route("/status")
@@ -147,7 +100,6 @@ def status():
         return jsonify({"status": "Connected"})
     else:
         return jsonify({"status": "Disconnected"})
-
 
 # -------- CONTROL --------
 @app.route("/start")
@@ -162,12 +114,15 @@ def stop():
     collect_data = False
     return "Stopped"
 
+# -------- COMMAND SYSTEM --------
+@app.route("/api/cmd")
+def get_cmd():
+    global latest_cmd
+    cmd = latest_cmd
+    latest_cmd = ""
+    return cmd
 
-# -------- HOME --------
-@app.route("/")
-def home():
-    return render_template("index.html")
-# -------- QUERY COMMAND --------
+# -------- QUERY --------
 @app.route("/query")
 def query():
     global latest_cmd
@@ -180,7 +135,7 @@ def query():
 
         parts = cmd.strip().split()
 
-        # -------- DELETE (SERVER DATA RANGE) --------
+        # DELETE SERVER DATA
         if parts[0].lower() == "delete" and len(parts) == 3:
             start = int(parts[1])
             end = int(parts[2])
@@ -195,9 +150,9 @@ def query():
                 writer.writeheader()
                 writer.writerows(rows)
 
-            return f"Deleted records from {start} to {end} (SERVER)"
+            return "Deleted (Server)"
 
-        # -------- SEARCH (SERVER DATA RANGE) --------
+        # SEARCH
         elif parts[0].lower() == "search" and len(parts) == 3:
             start = int(parts[1])
             end = int(parts[2])
@@ -206,30 +161,33 @@ def query():
                 rows = list(csv.DictReader(f))
 
             result = [r for r in rows if start <= int(r["id"]) <= end]
-
             return jsonify(result)
 
-        # -------- SHOW ALL SERVER DATA --------
+        # SHOW ALL
         elif parts[0].lower() == "all":
             with open(DATA_FILE, "r") as f:
                 return jsonify(list(csv.DictReader(f)))
 
-        # -------- CLEAR SD CARD --------
+        # CLEAR SD
         elif parts[0].lower() == "clear_sd":
             latest_cmd = "CLEAR_SD"
-            return "SD Clear Command Sent to ESP"
+            return "SD Clear Command Sent"
 
-        # -------- SYNC SD TO SERVER --------
+        # SYNC SD
         elif parts[0].lower() == "sync_sd":
             latest_cmd = "SYNC"
-            return "SD Sync Command Sent to ESP"
+            return "SD Sync Started"
 
-        # -------- UNKNOWN COMMAND --------
         else:
             return "Unknown Command"
 
     except Exception as e:
         return "Error: " + str(e)
+
+# -------- HOME --------
+@app.route("/")
+def home():
+    return render_template("index.html")
 
 # -------- RUN --------
 if __name__ == "__main__":
